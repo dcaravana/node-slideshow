@@ -4,6 +4,6 @@
 # [DATE]
 # Corey Hart @ http://www.codenothing.com
 #
-node node/server.js > s.log &
+node client/client.js > c.log &
 sleep 1
-tail -f s.log
+tail -f c.log

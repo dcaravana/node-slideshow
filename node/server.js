@@ -1,6 +1,6 @@
 /**
- * Node Slideshow [VERSION]
- * [DATE]
+ * Node Slideshow 1.0
+ * September 14, 2010
  * Corey Hart @ http://www.codenothing.com
  */
 var sys = require('sys'),
@@ -19,7 +19,8 @@ var sys = require('sys'),
 		max: 0
 	},
 	stack = {},
-	rdir = /\/$/, rstart = /^[^\/]/;
+	rdir = /\/$/, rstart = /^[^\/]/,
+	connCount=0;
 
 
 
@@ -30,21 +31,28 @@ server.addListener("connection", function( conn ) {
 	sys.puts( 'Connection Created [id:' + conn.id + '] [time:' + Date.now() + ']' );
 	conn.write(
 		JSON.stringify({
-			slide: Info.slide
+			slide: Info.slide,
+			ts: 0
 		})
 	);
-	stack[ conn.id ] = conn;
+	connCount++;
 });
 server.addListener("close", function( conn ) {
 	sys.puts( 'Closing Connection [id:' + conn.id + '] [time:' + Date.now() + ']' );
 	if ( stack.hasOwnProperty( conn.id ) ) {
-		delete stack[ conn.id ];
+		connCount--;
+		
+		// if not closed, TCP connections remains in TIME_WAIT state causing errors
+		conn.close();
 	}
 });
 server.listen( Config.port );
 sys.puts( 'Socket created on port ' + Config.port );
 
 
+setInterval(function() {
+	sys.puts("Connected: " + connCount + " - " + sys.inspect(process.memoryUsage()).replace(/\n/g,''));
+}, 2000);
 
 
 /*
@@ -92,17 +100,14 @@ http.createServer(function( request, response ) {
 		ret.slide = query.slide;
 	}
 
-
 	// Do slide transition if requested
 	if ( ret.slide !== undefined ) {
+
+	        // timestamp
+        	ret.ts = Date.now();
+
 		Info.slide = ret.slide;
-		for ( var i in stack ) {
-			if ( stack[ i ] ) {
-				stack[ i ].broadcast( JSON.stringify( ret ) );
-				stack[ i ].write( JSON.stringify( ret ) );
-				break;
-			}
-		}
+		server.broadcast( JSON.stringify( ret ) );
 		Info.timeLeft = Info.timeEnd - Date.now();
 		response.writeHead( 200 );
 		response.end( JSON.stringify( Info ) );
@@ -135,4 +140,8 @@ sys.puts('Master Controller Enabled at http://localhost:' + Config.masterport + 
 fs.readFile( __dirname + '/../slideshow/index.html', 'utf-8', function( e, data ) {
 	Info.max = data.match( /<section[> ]/g ).length;
 	sys.puts( Info.max + ' Slides');
+});
+
+process.on('uncaughtException', function (err) {
+  sys.puts('Runaway exception: ' + err.stack);
 });
